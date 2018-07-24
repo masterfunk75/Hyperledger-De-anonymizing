@@ -12,20 +12,25 @@ from indy.error import ErrorCode, IndyError
 import shutil
 from shutil import rmtree
 
+import os
+import subprocess
+import signal
+
+
 #from src.utils import get_pool_genesis_txn_path, run_coroutine
 
-df = pd.DataFrame.from_csv("samples_users_dataset.csv", sep='\t')
-dforg = pd.DataFrame.from_csv("sample_organisation_dataset.csv", sep='\t')
+df = pd.DataFrame.from_csv("small_users_dataset.csv", sep='\t')
+dforg = pd.DataFrame.from_csv("small_organisation_dataset.csv", sep='\t')
 
 #shutil.rmtree('/home/indy/.indy_client/pool/')
 #shutil.rmtree('/home/indy/.indy_client/wallet/')
 
 async def run():
     print("Getting started -> started")
-    
-    # Set protocol version 2 to work with Indy Node 1.4 
+
+    # Set protocol version 2 to work with Indy Node 1.4
     await pool.set_protocol_version(2)
-    
+
     # Pool setup
     print("Open Pool Ledger")
     pool_name = 'pool_test'
@@ -71,51 +76,53 @@ async def run():
     print("==============================")
     print("== Getting Trust Anchor credentials - Government getting Verinym  ==")
     print("------------------------------")
-
+    time.sleep(1)
     government_did = await get_verinym(pool_handle, "Sovrin Steward", steward_wallet, steward_did,
                                        steward_government_key, gen_gov_name, government_wallet, government_steward_did,
                                        government_steward_key, 'TRUST_ANCHOR') #set at Trust Anchor
 
     ###On bording Universities by steward
     #Creating dictionnary containing wallet/did info for all univ
-    university_did_wallet_map = {}
+
+    univ_did_wallet_map = {}
     for i in range(len(dforg)):
         #get Uni name from user dataset
         if dforg.ix[i, 'Type'] == 'University' :
             curr_univ_name = str(dforg.ix[i, 'Name']).replace(" ", "_")
             curr_univ_wallet_name = curr_univ_name+"_wallet"
             curr_univ_wallet_credentials = json.dumps({"key": curr_univ_name+"_wallet_key"})
-            
+
 
             ("==============================")
             print("== Getting Trust Anchor credentials - "+curr_univ_name+" Onboarding  ==")
             print("------------------------------")
 
             curr_univ_wallet, steward_curr_univ_key, curr_univ_steward_did, curr_univ_steward_key, _ = \
-            await onboarding(pool_handle, 
-                             pool_name, 
-                             "Sovrin Steward", 
-                             steward_wallet, 
+            await onboarding(pool_handle,
+                             pool_name,
+                             "Sovrin Steward",
+                             steward_wallet,
                              steward_did,
-                             curr_univ_name, 
-                             None, 
-                             curr_univ_name+'_wallet', 
+                             curr_univ_name,
+                             None,
+                             curr_univ_name+'_wallet',
                              curr_univ_wallet_credentials
                             )
+
 
             print("==============================")
             print("== Getting Trust Anchor credentials - " +curr_univ_name+ " getting Verinym  ==")
             print("------------------------------")
-
-            curr_univ_did = await get_verinym(pool_handle, 
-                                              "Sovrin Steward", 
-                                              steward_wallet, 
-                                              steward_did, 
+            time.sleep(1)
+            curr_univ_did = await get_verinym(pool_handle,
+                                              "Sovrin Steward",
+                                              steward_wallet,
+                                              steward_did,
                                               steward_curr_univ_key,
-                                              curr_univ_name, 
-                                              curr_univ_wallet, 
-                                              curr_univ_steward_did, 
-                                              curr_univ_steward_key, 
+                                              curr_univ_name,
+                                              curr_univ_wallet,
+                                              curr_univ_steward_did,
+                                              curr_univ_steward_key,
                                               'TRUST_ANCHOR'
                                               )
 
@@ -127,11 +134,12 @@ async def run():
             #4 => curr_univ_steward_key;
             #5 => curr_univ_did;
             curr_univ_info_list = [curr_univ_wallet, curr_univ_wallet_name, steward_curr_univ_key, curr_univ_steward_did, curr_univ_steward_key, curr_univ_did]
-            university_did_wallet_map = {curr_univ_name : curr_univ_info_list}
+            univ_did_wallet_map[curr_univ_name] = curr_univ_info_list
 
+    print(univ_did_wallet_map)
     ###On bording Company by steward
     #Creating dictionnary containing wallet/did info for all comp
-    company_did_wallet_map = {}
+    comp_did_wallet_map = {}
     for i in range(len(dforg)):
         #get Uni name from user dataset
         if dforg.ix[i, 'Type'] == 'Company' :
@@ -143,15 +151,15 @@ async def run():
             print("==============================")
             print("== Getting Trust Anchor credentials - "+curr_comp_name+" Onboarding  ==")
             print("------------------------------")
-
-            curr_comp_wallet, curr_comp_wallet_name, steward_curr_comp_key, curr_comp_steward_did, curr_comp_steward_key, _ = \
-                await onboarding(pool_handle, 
-                                 pool_name, 
-                                 "Sovrin Steward", 
-                                 steward_wallet, 
+            time.sleep(1)
+            curr_comp_wallet,  steward_curr_comp_key, curr_comp_steward_did, curr_comp_steward_key, _ = \
+                await onboarding(pool_handle,
+                                 pool_name,
+                                 "Sovrin Steward",
+                                 steward_wallet,
                                  steward_did,
                                  curr_comp_name,
-                                 None, 
+                                 None,
                                  curr_comp_name+'_wallet',
                                  curr_comp_wallet_credentials
                                 )
@@ -159,16 +167,16 @@ async def run():
             print("==============================")
             print("== Getting Trust Anchor credentials - "+curr_comp_name+" getting Verinym  ==")
             print("------------------------------")
-
-            curr_comp_did = await get_verinym(pool_handle, 
-                                              "Sovrin Steward", 
-                                              steward_wallet, 
-                                              steward_did, 
-                                              steward_curr_comp_name_key,
-                                              curr_comp_name, 
-                                              curr_comp_name_wallet, 
-                                              curr_comp_name_steward_did, 
-                                              curr_comp_name_steward_key, 
+            time.sleep(1)
+            curr_comp_did = await get_verinym(pool_handle,
+                                              "Sovrin Steward",
+                                              steward_wallet,
+                                              steward_did,
+                                              steward_curr_comp_key,
+                                              curr_comp_name,
+                                              curr_comp_wallet,
+                                              curr_comp_steward_did,
+                                              curr_comp_steward_key,
                                               'TRUST_ANCHOR'
                                              )
             #Indix list :
@@ -179,7 +187,7 @@ async def run():
             #4 => curr_comp_steward_key;
             #5 => curr_comp_did;
             curr_comp_info_list = [curr_comp_wallet, curr_comp_wallet_name, steward_curr_comp_key, curr_comp_steward_did, curr_comp_steward_key, curr_comp_did]
-            company_did_wallet_map = {curr_comp_name : curr_comp_info_list}
+            comp_did_wallet_map[curr_comp_name] = curr_comp_info_list
 
     ###On bording Bank by steward
     #Creating dictionnary containing wallet/did info for all Bank
@@ -195,30 +203,30 @@ async def run():
             print("== Getting Trust Anchor credentials - "+curr_bank_name+" Onboarding  ==")
             print("------------------------------")
 
-            curr_bank_wallet, curr_bank_wallet_name, steward_curr_bank_key, curr_bank_steward_did, curr_bank_steward_key, _ = \
-                await onboarding(pool_handle, 
-                                 pool_name, 
+            curr_bank_wallet, steward_curr_bank_key, curr_bank_steward_did, curr_bank_steward_key, _ = \
+                await onboarding(pool_handle,
+                                 pool_name,
                                  "Sovrin Steward",
-                                 steward_wallet, 
+                                 steward_wallet,
                                  steward_did,
-                                 curr_bank_name, 
-                                 None, 
+                                 curr_bank_name,
+                                 None,
                                  curr_bank_name+'_wallet',
                                  curr_bank_wallet_credentials)
 
             print("==============================")
             print("== Getting Trust Anchor credentials -"+curr_bank_name+"getting Verinym  ==")
             print("------------------------------")
-
-            curr_bank_did = await get_verinym(pool_handle, 
-                                              "Sovrin Steward", 
-                                              steward_wallet, 
-                                              steward_did, 
-                                              steward_curr_bank_name_key,
-                                              curr_bank_name, 
-                                              curr_bank_name_wallet, 
-                                              curr_bank_name_steward_did, 
-                                              curr_bank_name_steward_key, 
+            time.sleep(1)
+            curr_bank_did = await get_verinym(pool_handle,
+                                              "Sovrin Steward",
+                                              steward_wallet,
+                                              steward_did,
+                                              steward_curr_bank_key,
+                                              curr_bank_name,
+                                              curr_bank_wallet,
+                                              curr_bank_steward_did,
+                                              curr_bank_steward_key,
                                               'TRUST_ANCHOR')
             #Indix list :
             #0 => curr_bank_wallet;
@@ -228,7 +236,7 @@ async def run():
             #4 => curr_bank_steward_key;
             #5 => curr_bank_did;
             curr_bank_info_list = [curr_bank_wallet, curr_bank_wallet_name, steward_curr_bank_key, curr_bank_steward_did, curr_bank_steward_key, curr_bank_did]
-            bank_did_wallet_map = {curr_bank_name : curr_bank_info_list}
+            bank_did_wallet_map[curr_bank_name] = curr_bank_info_list
 
 
     ##--------------------------------------------------------------------------
@@ -276,7 +284,7 @@ async def run():
     for i in range(len(dforg)):
         #get Uni name from user dataset
         if dforg.ix[i, 'Type'] == 'University' :
-            curr_univ_name = str(dforg.ix[i, 'Name'])
+            curr_univ_name = str(dforg.ix[i, 'Name']).replace(" ", "_")
 
             print("==============================")
             print("==="+curr_univ_name+"Credential Definition Setup ==")
@@ -293,7 +301,7 @@ async def run():
             print(curr_univ_name+" -> Create and store in Wallet \" Transcript\" Credential Definition")
             (curr_univ_transcript_cred_def_id, curr_univ_transcript_cred_def_json) = \
                 await anoncreds.issuer_create_and_store_credential_def(attr_univ_wallet, attr_univ_did, transcript_schema,
-                                                                        'TAG1', 'CL', '{"support_revocation": false}')
+                                                                        curr_univ_name, 'CL', '{"support_revocation": false}')
 
             print(curr_univ_name+" -> Send  \" Transcript\" Credential Definition to Ledger")
             await send_cred_def(pool_handle, attr_univ_wallet, attr_univ_did, curr_univ_transcript_cred_def_json)
@@ -302,7 +310,7 @@ async def run():
             #0 => curr_univ_transcript_cred_def_id;
             #1 => curr_univ_transcript_cred_def_json;
             curr_univ_cred_def_list = [curr_univ_transcript_cred_def_id, curr_univ_transcript_cred_def_json]
-            univ_cred_map = {curr_univ_name : curr_univ_cred_def_list} # filling cred_def info for each Uni
+            univ_cred_map[curr_univ_name] = curr_univ_cred_def_list # filling cred_def info for each Uni
 
     ## -Companies setup their Job application Credential Definition ==> Schema 1
     comp_cred_map = {} # contains credential def json & id for all uni
@@ -328,7 +336,7 @@ async def run():
             print("\"Acme\" -> Create and store in Wallet \"Job-Certificate\" Credential Definition")
             (curr_comp_job_cred_def_id, curr_comp_job_cred_def_json) = \
                 await anoncreds.issuer_create_and_store_credential_def(attr_comp_wallet, attr_comp_did, job_certificate_schema,
-                                                                        'TAG1', 'CL', '{"support_revocation": false}')
+                                                                        curr_comp_name, 'CL', '{"support_revocation": false}')
 
             print("\"Acme\" -> Send \"Job-Certificate\" Credential Definition to Ledger")
             await send_cred_def(pool_handle, attr_comp_wallet, attr_comp_did, curr_comp_job_cred_def_json)
@@ -337,7 +345,7 @@ async def run():
             #0 => curr_comp_job_cred_def_id;
             #1 => curr_comp_job_cred_def_json;
             curr_comp_cred_def_list = [curr_comp_job_cred_def_id, curr_comp_job_cred_def_json]
-            comp_cred_map = {curr_comp_name : curr_comp_cred_def_list} # filling cred_def info for each Comp
+            comp_cred_map[curr_comp_name] = curr_comp_cred_def_list # filling cred_def info for each Comp
 
 
     ## -Banks setup their ????? Credential Definition ==> NaN
@@ -350,52 +358,58 @@ async def run():
     user_info_dict = {}
     for i in range(len(df)) :
         curr_user_fullname = str(df.ix[i, 'first_name']+"_"+df.ix[i, 'last_name'])
-        
+
         curr_user_wallet_name = curr_user_fullname+'_wallet'
         curr_user_wallet_credentials = json.dumps({"key": "alice_wallet_key"})
 
-        curr_user_wallet, curr_user_wallet_name, government_curr_user_key, curr_user_government_did, curr_user_government_key, _ \
-            = await onboarding(pool_handle, 
-                               pool_name, 
-                               "Generic Government", 
-                               government_wallet, 
-                               government_did, 
-                               curr_user_fullname, 
-                               None, 
-                               curr_user_wallet_name,
-                               curr_user_wallet_credentials  
-                              )
+        print("==============================")
+        print("== Government Create user wallet & did  - Onboarding ==")
+        print("------------------------------")
 
-        curr_user_did = await get_verinym(pool_handle, 
-                                          "Generic Government", 
-                                          government_wallet, 
-                                          government_did, 
+        curr_user_wallet, government_curr_user_key, curr_user_government_did, curr_user_government_key, _ \
+            = await onboarding(pool_handle,
+                               pool_name,
+                               "Generic Government",
+                               government_wallet,
+                               government_did,
+                               curr_user_fullname,
+                               None,
+                               curr_user_wallet_name,
+                               curr_user_wallet_credentials
+                              )
+        time.sleep(1)
+        curr_user_did = await get_verinym(pool_handle,
+                                          "Generic Government",
+                                          government_wallet,
+                                          government_did,
                                           government_curr_user_key,
-                                          curr_user_fullname, 
-                                          curr_user_wallet, 
-                                          curr_user_government_did, 
-                                          curr_user_government_key, 
-                                          'common USER'
+                                          curr_user_fullname,
+                                          curr_user_wallet,
+                                          curr_user_government_did,
+                                          curr_user_government_key,
+                                          None
                                          )
 
-        user_info_list = [curr_user_wallet, curr_user_wallet_name, government_curr_user_key, curr_user_government_did, curr_user_government_key, curr_user_did]
-        user_info_dict = {curr_user_fullname : user_info_list} #getting info for every users
+        user_info_list = [curr_user_wallet, curr_user_wallet_name, government_curr_user_key, curr_user_government_did, curr_user_government_key, curr_user_did, curr_user_wallet_credentials]
+        user_info_dict[curr_user_fullname] = user_info_list #getting info for every users
 
     ##--------------------------------------------------------------------------
     ###             SIMULATING AGENTS CREDENTIAL TRANSACTIONS                ###
     ##--------------------------------------------------------------------------
 
+    ## start sniffing packets
+    #cap = pyshark.LiveCapture(interface='eth0', output_file='packets.txt', only_summuries=True)
+    #cap.sniff(timeout='1000')
     ## I - implement at least 5 type of credential (exchanges & proofs)
 
     # Defining Credential TYPE I : University transcipt request (user to his uni)  ## LOOPING FOR ALL USERS IN DATASET
     for i in range(len(df)) :
-        curr_user_fullname = df.ix[i, 'first_name']+"_"+df.ix[i, 'last_name'] # getting user fullname
+        curr_user_fullname = str(df.ix[i, 'first_name']+"_"+df.ix[i, 'last_name']) # getting user fullname
 
         #loading attributes from dataset :
         curr_user_firstname = df.ix[i, 'first_name']
         curr_user_lastname = df.ix[i, 'last_name']
-
-        curr_user_univ_name = df.ix[i, 'Academics'] # user's alma matter
+        curr_user_univ_name = str(df.ix[i, 'Academics']).replace(" ", "_") # user's alma matter
         curr_user_univ_degree = df.ix[i, 'Academics_Degree']
         curr_user_univ_status = df.ix[i, 'Academics_DegreeStatus']
         curr_user_univ_average = df.ix[i, 'Academics_GradAverage']
@@ -411,31 +425,42 @@ async def run():
         print("==============================")
         print("== Getting Transcript with "+ curr_user_univ_name +" - Onboarding ==")
         print("------------------------------")
+        time.sleep(2)
 
-        None, None, curr_univ_user_key, curr_user_univ_did,
-        curr_user_univ_key, curr_univ_user_connection_response \
+
+        #--------Start sniffing subprocess --------:
+        label = 'tsp_'+curr_user_fullname+'_1'
+        sp = subprocess.Popen("exec python3 sniff.py "+label, shell=True)
+        #--------Start sniffing subprocess --------:
+        time.sleep(0.5)
+
+        curr_user_wallet, curr_univ_user_key, curr_user_univ_did, curr_user_univ_key, curr_univ_user_connection_response \
             = await onboarding(pool_handle,
                                pool_name, curr_user_univ_name,
-                               university_did_wallet_map[curr_user_univ_name][0], #curr_user_univ_wallet
-                               university_did_wallet_map[curr_user_univ_name][5], #curr_user_univ_did
-                               curr_user_fullname, None, curr_user_fullname+'_wallet')
-
+                               univ_did_wallet_map[curr_user_univ_name][0], #curr_user_univ_wallet
+                               univ_did_wallet_map[curr_user_univ_name][5], #curr_user_univ_did
+                               curr_user_fullname,
+                               user_info_dict[curr_user_fullname][0], #curr_user_wallet
+                               curr_user_fullname+'_wallet',
+                               user_info_dict[curr_user_fullname][6] #curr_user_wallet_credentials
+                               )
+        time.sleep(0.2)
         print("==============================")
         print("== Getting Transcript with "+ curr_user_univ_name +" - Getting Transcript Credential ==")
         print("------------------------------")
 
         print(curr_user_univ_name +" -> Create \"Transcript\" Credential Offer for "+curr_user_fullname)
         transcript_cred_offer_json = \
-            await anoncreds.issuer_create_credential_offer(university_did_wallet_map[curr_user_univ_name][0],
+            await anoncreds.issuer_create_credential_offer(univ_did_wallet_map[curr_user_univ_name][0],
                                                            univ_cred_map[curr_user_univ_name][0])
                                                            #curr_user_univ_transcript_cred_def_id
-
+        time.sleep(0.1)
         print( curr_user_univ_name +" -> Get key for "+curr_user_fullname+"did")
         curr_user_univ_verkey = await did.key_for_did(pool_handle, user_info_dict[curr_user_fullname][0], #user_wallet
                                                       curr_univ_user_connection_response['did'])
 
         print(curr_user_univ_name +" -> Authcrypt \"Transcript\" Credential Offer for"+curr_user_fullname)
-        authcrypted_transcript_cred_offer = await crypto.auth_crypt(university_did_wallet_map[curr_user_univ_name][0],
+        authcrypted_transcript_cred_offer = await crypto.auth_crypt(univ_did_wallet_map[curr_user_univ_name][0],
                                                                     curr_univ_user_key, curr_user_univ_verkey,
                                                                     transcript_cred_offer_json.encode('utf-8'))
 
@@ -470,7 +495,7 @@ async def run():
 
         print("\"User\" -> Authdecrypt \"Transcript\" Credential Request from Univ")
         curr_user_univ_verkey, authdecrypted_transcript_cred_request_json, _ = \
-            await auth_decrypt(university_did_wallet_map[curr_user_univ_name][0], curr_univ_user_key, authcrypted_transcript_cred_request)
+            await auth_decrypt(univ_did_wallet_map[curr_user_univ_name][0], curr_univ_user_key, authcrypted_transcript_cred_request)
 
         print("\"Univ\" -> Create \"Transcript\" Credential for User")
         transcript_cred_values = json.dumps({
@@ -484,13 +509,13 @@ async def run():
         })
 
         transcript_cred_json, _, _ = \
-            await anoncreds.issuer_create_credential(university_did_wallet_map[curr_user_univ_name][0],
+            await anoncreds.issuer_create_credential(univ_did_wallet_map[curr_user_univ_name][0],
                                                      transcript_cred_offer_json,
                                                      authdecrypted_transcript_cred_request_json,
                                                      transcript_cred_values, None, None)
 
         print("\"Univ\" -> Authcrypt \"Transcript\" Credential for User")
-        authcrypted_transcript_cred_json = await crypto.auth_crypt(university_did_wallet_map[curr_user_univ_name][0],
+        authcrypted_transcript_cred_json = await crypto.auth_crypt(univ_did_wallet_map[curr_user_univ_name][0],
                                                                    curr_univ_user_key, curr_user_univ_verkey,
                                                                    transcript_cred_json.encode('utf-8'))
 
@@ -504,18 +529,24 @@ async def run():
         await anoncreds.prover_store_credential(user_info_dict[curr_user_fullname][0], None, transcript_cred_request_metadata_json,
                                             authdecrypted_transcript_cred_json, curr_univ_transcript_cred_def, None)
 
+        #--------Stop sniffing subprocess --------:
+        sp.send_signal(signal.SIGINT)
+        #--------Stop sniffing subprocess --------:
+        time.sleep(1)
+
+
     # Defining Credential TYPE II : Job certificate request (user to his current company)
     for i in range(len(df)) :
-        curr_user_fullname = df.ix[i, 'first_name']+"_"+df.ix[i, 'last_name'] # getting user fullname
+        curr_user_fullname = str(df.ix[i, 'first_name']+"_"+df.ix[i, 'last_name']) # getting user fullname
 
-        curr_user_firstname = df.ix[i, 'first_name']
-        curr_user_lastname = df.ix[i, 'last_name']
+        curr_user_firstname = str(df.ix[i, 'first_name'])
+        curr_user_lastname = str(df.ix[i, 'last_name'])
 
-        curr_user_comp_name = df.ix[i, 'Organisation']
+        curr_user_comp_name = str(df.ix[i, 'Organisation'])
 
-        curr_user_comp_salary = df.ix[i, 'Job_Salary']
-        curr_user_comp_experience = df.ix[i, 'Job_Experience']
-        curr_user_comp_status = df.ix[i, 'Job_Status']
+        curr_user_comp_salary = str(df.ix[i, 'Job_Salary'])
+        curr_user_comp_experience = str(df.ix[i, 'Job_Experience'])
+        curr_user_comp_status = str(df.ix[i, 'Job_Status'])
 
         print("====================================")
         print("=== User : "+curr_user_fullname+" ==")
@@ -527,13 +558,24 @@ async def run():
         print("== Getting Job Certificate with "+ curr_user_comp_name +" - Onboarding ==")
         print("------------------------------")
 
-        None, None, curr_comp_user_key, curr_user_comp_did,
-        curr_user_comp_key, curr_comp_user_connection_response \
+        time.sleep(1)
+        #--------Start sniffing subprocess --------:
+        label = 'jc_'+curr_user_fullname+'_1'
+        sp = subprocess.Popen("exec python3 sniff.py "+label, shell=True)
+        #--------Start sniffing subprocess --------:
+        time.sleep(1)
+
+        curr_user_wallet, curr_comp_user_key, curr_user_comp_did, curr_user_comp_key, curr_comp_user_connection_response \
             = await onboarding(pool_handle,
                                pool_name, curr_user_comp_name,
-                               company_did_wallet_map[curr_user_comp_name][0], #curr_user_comp_wallet
-                               company_did_wallet_map[curr_user_comp_name][5], #curr_user_comp_did
-                               curr_user_fullname, None, curr_user_fullname+'_wallet')
+                               comp_did_wallet_map[curr_user_comp_name][0], #curr_user_comp_wallet
+                               comp_did_wallet_map[curr_user_comp_name][5], #curr_user_comp_did
+                               curr_user_fullname,
+                               user_info_dict[curr_user_fullname][0], #curr_user_wallet
+                               curr_user_fullname+'_wallet',
+                               user_info_dict[curr_user_fullname][6] #curr_user_wallet_credentials
+
+                               )
 
         print("==============================")
         print("== Getting Job-Certificate Credential from"+curr_user_comp_name+"==")
@@ -541,16 +583,17 @@ async def run():
 
         print(curr_user_comp_name+" -> Create \"Job-Certificate\" Credential Offer for User")
         job_certificate_cred_offer_json = \
-            await anoncreds.issuer_create_credential_offer(company_did_wallet_map[curr_user_comp_name][0], #company Wallet
+            await anoncreds.issuer_create_credential_offer(comp_did_wallet_map[curr_user_comp_name][0], #company Wallet
                                                            comp_cred_map[curr_user_comp_name][0])
 
+        time.sleep(1)
         print(curr_user_comp_name+" -> Get key for Alice did")
         curr_user_comp_verkey = await did.key_for_did(pool_handle,
-                                                  company_did_wallet_map[curr_user_comp_name][0],
+                                                  comp_did_wallet_map[curr_user_comp_name][0],
                                                   curr_comp_user_connection_response['did'])
 
         print(curr_user_comp_name+" -> Authcrypt \"Job-Certificate\" Credential Offer for User")
-        authcrypted_job_certificate_cred_offer = await crypto.auth_crypt(company_did_wallet_map[curr_user_comp_name][0],
+        authcrypted_job_certificate_cred_offer = await crypto.auth_crypt(comp_did_wallet_map[curr_user_comp_name][0],
                                                                          curr_comp_user_key,
                                                                          curr_user_comp_verkey,
                                                                          job_certificate_cred_offer_json.encode('utf-8'))
@@ -590,7 +633,7 @@ async def run():
 
         print("\"Company\" -> Authdecrypt \"Job-Certificate\" Credential Request from User")
         curr_user_comp_verkey, authdecrypted_job_certificate_cred_request_json, _ = \
-            await auth_decrypt(company_did_wallet_map[curr_user_comp_name][0],
+            await auth_decrypt(comp_did_wallet_map[curr_user_comp_name][0],
                                curr_comp_user_key,
                                authcrypted_job_certificate_cred_request_json)
 
@@ -604,14 +647,14 @@ async def run():
         })
 
         job_certificate_cred_json, _, _ = \
-            await anoncreds.issuer_create_credential(company_did_wallet_map[curr_user_comp_name][0],
+            await anoncreds.issuer_create_credential(comp_did_wallet_map[curr_user_comp_name][0],
                                                      job_certificate_cred_offer_json,
                                                      authdecrypted_job_certificate_cred_request_json,
                                                      curr_user_job_certificate_cred_values_json, None, None)
 
         print("\"Company\" ->  Authcrypt \"Job-Certificate\" Credential for User")
         authcrypted_job_certificate_cred_json = \
-            await crypto.auth_crypt(company_did_wallet_map[curr_user_comp_name][0],
+            await crypto.auth_crypt(comp_did_wallet_map[curr_user_comp_name][0],
                                     curr_comp_user_key, curr_user_comp_verkey,
                                     job_certificate_cred_json.encode('utf-8'))
 
@@ -630,6 +673,11 @@ async def run():
                                                     authdecrypted_job_certificate_cred_json,
                                                     comp_cred_map[curr_user_comp_name][1], None)
 
+        #--------Stop sniffing subprocess --------:
+        sp.send_signal(signal.SIGINT)
+        #--------Stop sniffing subprocess --------:
+        time.sleep(1)
+
     # TO DO Defining Credential TYPE III : Gov ID request (user to generic gov)
 
     # TO DO Defining Credential TYPE IV : Job applying request (user to a random company from our data) (proof)
@@ -642,32 +690,8 @@ async def run():
 
     ## III - find a way to store (in a data structure) public on-ledgers relevent data from credentials exchange
     print('PROCESSING FINISH !')
-    
+
     print("==============================")
-
-    print(" \"Sovrin Steward\" -> Close and Delete wallet")
-    await wallet.close_wallet(steward_wallet)
-    await wallet.delete_wallet(steward_wallet_name, steward_wallet_credentials)
-
-    print("\"Government\" -> Close and Delete wallet")
-    await wallet.close_wallet(government_wallet)
-    await wallet.delete_wallet(government_wallet_name, government_wallet_credentials)
-
-    print("\"Faber\" -> Close and Delete wallet")
-    await wallet.close_wallet(faber_wallet)
-    await wallet.delete_wallet(faber_wallet_name, faber_wallet_credentials)
-
-    print("\"Acme\" -> Close and Delete wallet")
-    await wallet.close_wallet(acme_wallet)
-    await wallet.delete_wallet(acme_wallet_name, acme_wallet_credentials)
-
-    print("\"Thrift\" -> Close and Delete wallet")
-    await wallet.close_wallet(thrift_wallet)
-    await wallet.delete_wallet(thrift_wallet_name, thrift_wallet_credentials)
-
-    print("\"Alice\" -> Close and Delete wallet")
-    await wallet.close_wallet(alice_wallet)
-    await wallet.delete_wallet(alice_wallet_name, alice_wallet_credentials)
 
     print("Close and Delete pool")
     await pool.close_pool_ledger(pool_handle)
@@ -683,7 +707,7 @@ async def onboarding(pool_handle, pool_name, _from, from_wallet, from_did, to,
 
     print("\"{}\" -> Send Nym to Ledger for \"{} {}\" DID".format(_from, _from, to))
     await send_nym(pool_handle, from_wallet, from_did, from_to_did, from_to_key, None)
-    
+
     print("\"{}\" -> Send connection request to {} with \"{} {}\" DID and nonce".format(_from, to, _from, to))
     connection_request = {
         'did': from_to_did,
